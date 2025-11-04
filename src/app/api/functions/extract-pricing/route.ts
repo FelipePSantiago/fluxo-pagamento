@@ -3,11 +3,16 @@ import { createClient } from '@supabase/supabase-js';
 import { authenticator } from 'otplib';
 import pdf from 'pdf-parse';
 
-// Criar cliente Supabase
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Função para criar cliente Supabase apenas quando necessário
+const getSupabaseClient = () => {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Supabase credentials not configured');
+  }
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+};
 
 interface ExtractPricingOutput {
   grossIncome: number;
@@ -46,6 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     const token = authHeader.substring(7);
+    const supabase = getSupabaseClient();
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
     if (error || !user) {

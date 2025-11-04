@@ -1,15 +1,18 @@
-import TerserPlugin from 'terser-webpack-plugin';
-import withPWA from 'next-pwa';
+// import TerserPlugin from 'terser-webpack-plugin';
+// import withPWA from 'next-pwa';
 
-const pwaConfig = {
-  dest: 'public',
-  register: true,
-  skipWaiting: true,
-  disable: process.env.NODE_ENV === 'development',
-};
+// const pwaConfig = {
+//   dest: 'public',
+//   register: true,
+//   skipWaiting: true,
+//   disable: process.env.NODE_ENV === 'development',
+// };
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Configuração para resolver conflito de lockfiles
+  outputFileTracingRoot: process.cwd(),
+  
   // Removido output: 'export' para funcionar no Vercel
   eslint: {
     ignoreDuringBuilds: true,
@@ -135,18 +138,18 @@ const nextConfig = {
       },
     });
 
-    if (!dev) {
-      config.optimization.minimizer.push(
-        new TerserPlugin({
-          terserOptions: {
-            compress: {
-              drop_console: true,
-              drop_debugger: true,
-            },
-          },
-        })
-      );
-    }
+    // if (!dev) {
+    //   config.optimization.minimizer.push(
+    //     new TerserPlugin({
+    //       terserOptions: {
+    //         compress: {
+    //           drop_console: true,
+    //           drop_debugger: true,
+    //         },
+    //       },
+    //     })
+    //   );
+    // }
 
     return config;
   },
@@ -201,4 +204,4 @@ const nextConfig = {
   poweredByHeader: false,
 };
 
-export default withPWA(pwaConfig)(nextConfig);
+export default nextConfig;
