@@ -3,7 +3,6 @@
 import { ArrowLeft, KeyRound, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { signOut } from "next-auth/react";
 
 import { Button } from '@/components/ui/button';
 import {
@@ -13,13 +12,13 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 function Verify2FAPageContent() {
   const router = useRouter();
   const { toast } = useToast();
-  const { authLoading, setIs2FAVerified, user } = useAuth();
+  const { authLoading, setIs2FAVerified, user, signOut } = useAuth();
   const [token, setToken] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -82,7 +81,8 @@ function Verify2FAPageContent() {
 
   const handleBackToLogin = async () => {
     try {
-      await signOut({ callbackUrl: '/login' });
+      await signOut();
+      router.push('/login');
     } catch {
       toast({
         variant: "destructive",

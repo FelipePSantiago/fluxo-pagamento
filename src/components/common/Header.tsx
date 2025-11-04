@@ -3,7 +3,6 @@
 import { LayoutDashboard, LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -16,17 +15,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Header() {
-  const { isAdmin, isFullyAuthenticated, user } = useAuth();
+  const { isAdmin, isFullyAuthenticated, user, signOut } = useAuth();
   const pathname = usePathname();
   const { toast } = useToast();
 
   const handleLogout = async () => {
     try {
-      await signOut({ callbackUrl: '/login' });
+      await signOut();
       toast({
         title: "Logout bem-sucedido!",
         description: "Você foi desconectado.",
@@ -75,8 +74,8 @@ export default function Header() {
                   >
                     <Avatar className="h-10 w-10">
                       <AvatarImage
-                        src={user?.image || ""}
-                        alt={user?.name || "Avatar"}
+                        src={user?.user_metadata?.avatar_url || ""}
+                        alt={user?.user_metadata?.name || "Avatar"}
                       />
                       <AvatarFallback>{getInitials(user?.email || "")}</AvatarFallback>
                     </Avatar>

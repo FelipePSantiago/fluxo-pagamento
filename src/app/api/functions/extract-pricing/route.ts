@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/config';
-import { db } from '@/lib/db';
+import { createClient } from '@supabase/supabase-js';
 import { authenticator } from 'otplib';
 import pdf from 'pdf-parse';
+
+// Criar cliente Supabase
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 interface ExtractPricingOutput {
   grossIncome: number;
@@ -35,8 +39,16 @@ const processPdf = async (pdfBuffer: Buffer): Promise<ExtractPricingOutput> => {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    // Verificar autenticação via token
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = authHeader.substring(7);
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
