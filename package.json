@@ -11,10 +11,6 @@
     "build:profile": "npm run build && npx @next/bundle-analyzer",
     "type-check": "tsc --noEmit",
     "clean": "rimraf .next out",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio",
-    "db:generate": "prisma generate",
-    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.4",
