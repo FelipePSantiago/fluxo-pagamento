@@ -1,22 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/config';
-import { db } from '@/lib/db';
+import { createClient } from '@supabase/supabase-js';
 import { format, parseISO, addYears } from 'date-fns';
+
+// Criar cliente Supabase
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    // Verificar autenticação via token
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = authHeader.substring(7);
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Verificar se é admin
-    const user = await db.user.findUnique({
-      where: { email: session.user.email! },
-    });
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single();
 
-    if (!user?.isAdmin) {
+    if (profileError || !profile?.is_admin) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
@@ -30,26 +44,24 @@ export async function POST(request: NextRequest) {
     const startDate = constructionStartDate ? format(parseISO(constructionStartDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
     const deliveryDateFormatted = deliveryDate ? format(parseISO(deliveryDate), 'yyyy-MM-dd') : format(addYears(parseISO(startDate), 2), 'yyyy-MM-dd');
 
-    await db.property.upsert({
-      where: { id },
-      update: {
-        name: enterpriseName,
-        address: '',
-        city: '',
-        state: '',
-        value: 0,
-        updatedAt: new Date(),
-      },
-      create: {
+    const { error: upsertError } = await supabase
+      .from('properties')
+      .upsert({
         id,
         name: enterpriseName,
         address: '',
         city: '',
         state: '',
         value: 0,
-        createdBy: user.id,
-      },
-    });
+        updated_at: new Date().toISOString(),
+        created_by: user.id,
+      }, {
+        onConflict: 'id'
+      });
+
+    if (upsertError) {
+      throw new Error('Failed to save property');
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

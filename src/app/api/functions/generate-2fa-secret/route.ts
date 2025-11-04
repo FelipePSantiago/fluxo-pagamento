@@ -1,21 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/config';
-import { db } from '@/lib/db';
+import { createClient } from '@supabase/supabase-js';
 import { authenticator } from 'otplib';
+
+// Criar cliente Supabase
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    // Verificar autenticação via token
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await db.user.findUnique({
-      where: { email: session.user.email! },
-    });
+    const token = authHeader.substring(7);
+    const { data: { user }, error } = await supabase.auth.getUser(token);
 
-    if (!user) {
+    if (error || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Buscar perfil do usuário
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
@@ -23,13 +38,17 @@ export async function POST(request: NextRequest) {
     const secretUri = authenticator.keyuri(user.email!, "Entrada Facilitada", secret);
 
     // Salvar o segredo no banco de dados
-    await db.user.update({
-      where: { id: user.id },
-      data: {
-        twoFactorSecret: secret,
-        has2FA: false, // Ainda não está verificado
-      },
-    });
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        two_factor_secret: secret,
+        has_2fa: false, // Ainda não está verificado
+      })
+      .eq('id', user.id);
+
+    if (updateError) {
+      throw new Error('Failed to update 2FA settings');
+    }
 
     return NextResponse.json({ secretUri });
   } catch (error: any) {
