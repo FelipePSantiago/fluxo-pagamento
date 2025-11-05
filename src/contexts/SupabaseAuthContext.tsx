@@ -10,6 +10,7 @@ interface AuthContextType {
   session: Session | null;
   isAdmin: boolean;
   authLoading: boolean;
+  profileLoading: boolean;
   isFullyAuthenticated: boolean;
   setIsFullyAuthenticated: (isAuth: boolean) => void;
   has2FA: boolean | undefined;
@@ -31,6 +32,7 @@ export const AuthContext = createContext<AuthContextType>({
   session: null,
   isAdmin: false,
   authLoading: true,
+  profileLoading: false,
   isFullyAuthenticated: false,
   setIsFullyAuthenticated: () => {},
   has2FA: undefined,
@@ -72,6 +74,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const authLoading = !user && !session;
   const isAdmin = profile?.is_admin || false;
   const has2FA = profile?.has_2fa;
+  const profileLoading = user && !profile; // Novo estado para saber se perfil está carregando
 
   // Carregar perfil do usuário
   const loadProfile = async (userId: string) => {
@@ -87,20 +90,40 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return;
       }
 
+      console.log('Perfil carregado:', {
+        has_2fa: data?.has_2fa,
+        is_2fa_verified: data?.is_2fa_verified,
+        two_factor_secret: data?.two_factor_secret ? 'configured' : 'not configured'
+      });
+
       setProfile(data);
       
       // Definir como fully authenticated após carregar o perfil
       if (data) {
-        // Se o usuário não tem 2FA configurado, já está fully authenticated
+        // Se o usuário não tem 2FA configurado, não está fully authenticated até configurar
         if (!data.has_2fa) {
-          setIsFullyAuthenticated(true);
-          setIs2FAVerified(true);
+          setIsFullyAuthenticated(false);
+          setIs2FAVerified(false);
+          console.log('Usuário não tem 2FA configurado');
         } else {
-          // Se tem 2FA, verificar se já foi verificado nesta sessão
+          // Se tem 2FA configurado, verificar se já foi verificado nesta sessão
           const wasVerified = localStorage.getItem(`2fa-verified-${userId}`);
-          if (wasVerified === "true") {
+          const isProfileVerified = data.is_2fa_verified;
+          
+          console.log('Status 2FA:', {
+            wasVerified: wasVerified === "true",
+            isProfileVerified,
+            secretConfigured: !!data.two_factor_secret
+          });
+          
+          if (wasVerified === "true" || isProfileVerified) {
             setIs2FAVerified(true);
             setIsFullyAuthenticated(true);
+            console.log('2FA verificado - usuário fully authenticated');
+          } else {
+            setIs2FAVerified(false);
+            setIsFullyAuthenticated(false);
+            console.log('2FA não verificado - usuário precisa verificar');
           }
         }
       }
@@ -328,21 +351,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loadProperties();
   }, [user, isFullyAuthenticated]);
 
-  // Efeito para redirecionar para verificação 2FA quando necessário
+  // Efeito para redirecionar para configuração/verificação 2FA quando necessário
   useEffect(() => {
-    if (user && profile && profile.has_2fa && !is2FAVerified && typeof window !== 'undefined') {
-      // Verificar se não está já na página de verificação 2FA
-      if (!window.location.pathname.includes('/verify-2fa')) {
-        window.location.href = '/verify-2fa';
+    if (user && profile && !authLoading && typeof window !== 'undefined') {
+      const currentPath = window.location.pathname;
+      
+      // Se o usuário tem 2FA configurado mas não verificado
+      if (profile.has_2fa && !is2FAVerified) {
+        if (!currentPath.includes('/verify-2fa')) {
+          console.log('Redirecionando para verificação 2FA');
+          window.location.href = '/verify-2fa';
+        }
+      }
+      // Se o usuário não tem 2FA configurado
+      else if (!profile.has_2fa) {
+        if (!currentPath.includes('/setup-2fa') && !currentPath.includes('/login')) {
+          console.log('Redirecionando para configuração 2FA');
+          window.location.href = '/setup-2fa';
+        }
+      }
+      // Se o usuário tem 2FA configurado e verificado
+      else if (profile.has_2fa && is2FAVerified) {
+        if (currentPath.includes('/verify-2fa') || currentPath.includes('/setup-2fa')) {
+          console.log('2FA completo, redirecionando para simulador');
+          window.location.href = '/simulator';
+        }
       }
     }
-  }, [user, profile, is2FAVerified]);
+  }, [user, profile, authLoading, is2FAVerified]);
 
   const value: AuthContextType = {
     user,
     session,
     isAdmin,
     authLoading,
+    profileLoading,
     isFullyAuthenticated,
     setIsFullyAuthenticated,
     has2FA,

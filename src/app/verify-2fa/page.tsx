@@ -19,7 +19,7 @@ import { supabase } from '@/lib/supabase/client';
 function Verify2FAPageContent() {
   const router = useRouter();
   const { toast } = useToast();
-  const { authLoading, setIs2FAVerified, user, signOut } = useAuth();
+  const { authLoading, setIs2FAVerified, setIsFullyAuthenticated, user, signOut } = useAuth();
   const [token, setToken] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -67,6 +67,10 @@ function Verify2FAPageContent() {
           });
           localStorage.setItem(`2fa-verified-${user.id}`, "true");
           setIs2FAVerified(true);
+          setIsFullyAuthenticated(true);
+          
+          console.log('2FA verificado com sucesso, redirecionando para simulador');
+          
           // Redirecionar para o simulador após verificação bem-sucedida
           setTimeout(() => {
             router.push('/simulator');

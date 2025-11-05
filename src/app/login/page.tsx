@@ -2,7 +2,7 @@
 
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -24,9 +24,31 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const { toast } = useAuth();
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, isAdmin, user, authLoading, profileLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // Redirecionar automaticamente baseado no status do usuário
+  useEffect(() => {
+    if (user && !authLoading && !profileLoading) {
+      console.log('Usuário logado detectado:', {
+        email: user.email,
+        isAdmin,
+        currentPath: window.location.pathname
+      });
+
+      // Se for admin, redireciona para painel admin
+      if (isAdmin) {
+        console.log('Redirecionando admin para /admin/properties');
+        router.push('/admin/properties');
+        return;
+      }
+
+      // Se não for admin, redireciona para simulador
+      console.log('Redirecionando usuário comum para /simulator');
+      router.push('/simulator');
+    }
+  }, [user, authLoading, profileLoading, isAdmin, router]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,10 +63,11 @@ export default function LoginPage() {
 
       toast({
         title: "Login realizado com sucesso!",
-        description: "Você será redirecionado para o simulador.",
+        description: isAdmin ? "Redirecionando para o painel admin..." : "Redirecionando para o simulador...",
       });
 
-      router.push("/simulator");
+      // Não redireciona manualmente - o useEffect cuida disso
+      // router.push("/simulator");
     } catch (error: any) {
       console.error("Erro no login com e-mail:", error);
       toast({

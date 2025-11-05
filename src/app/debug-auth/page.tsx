@@ -13,9 +13,11 @@ export default function DebugAuthPage() {
     user, 
     session, 
     authLoading, 
+    profileLoading,
     isFullyAuthenticated, 
     has2FA, 
     is2FAVerified,
+    isAdmin,
     clearCorruptedAuth,
     signOut 
   } = useAuth();
@@ -57,9 +59,11 @@ export default function DebugAuthPage() {
         contextState: {
           user: user ? { id: user.id, email: user.email } : null,
           authLoading,
+          profileLoading,
           isFullyAuthenticated,
           has2FA,
-          is2FAVerified
+          is2FAVerified,
+          isAdmin
         }
       });
     } catch (error) {
@@ -117,11 +121,14 @@ export default function DebugAuthPage() {
           <CardContent>
             <div className="grid gap-2 text-sm font-mono">
               <div>👤 Usuário: {user ? `${user.email} (${user.id})` : 'Não logado'}</div>
-              <div>🔄 Carregando: {authLoading ? 'Sim' : 'Não'}</div>
+              <div>🔄 Auth Loading: {authLoading ? 'Sim' : 'Não'}</div>
+              <div>📋 Profile Loading: {profileLoading ? 'Sim' : 'Não'}</div>
+              <div>👑 Admin: {isAdmin ? 'Sim' : 'Não'}</div>
               <div>✅ Fully Authenticated: {isFullyAuthenticated ? 'Sim' : 'Não'}</div>
               <div>🔐 Tem 2FA: {has2FA === undefined ? 'Não verificado' : has2FA ? 'Sim' : 'Não'}</div>
               <div>✅ 2FA Verificado: {is2FAVerified ? 'Sim' : 'Não'}</div>
               <div>📧 Sessão: {session ? 'Ativa' : 'Inativa'}</div>
+              <div>📍 Página atual: {typeof window !== 'undefined' ? window.location.pathname : 'N/A'}</div>
             </div>
           </CardContent>
         </Card>

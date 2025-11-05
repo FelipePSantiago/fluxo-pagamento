@@ -21,7 +21,7 @@ import { functions } from "@/lib/api/functions";
 function Setup2FAPageContent() {
   const router = useRouter();
   const { toast } = useToast();
-  const { authLoading, has2FA, setIsFullyAuthenticated, user } = useAuth();
+  const { authLoading, has2FA, setIsFullyAuthenticated, setIs2FAVerified, user } = useAuth();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -96,9 +96,19 @@ function Setup2FAPageContent() {
           description: "Você será redirecionado para a página principal.",
         });
 
+        // Marcar como verificado no localStorage
         localStorage.setItem(`2fa-verified-${user.id}`, "true");
+        
+        // Atualizar estado do contexto
+        setIs2FAVerified(true);
         setIsFullyAuthenticated(true);
-        router.push("/simulator");
+        
+        console.log('2FA configurado com sucesso, redirecionando para simulador');
+        
+        // Pequeno delay para garantir que o estado seja atualizado
+        setTimeout(() => {
+          router.push("/simulator");
+        }, 1000);
       } else {
         throw new Error("Código inválido. Tente novamente.");
       }
