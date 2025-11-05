@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { supabase } from '@/lib/supabase/client';
+import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, RefreshCw, ShieldCheck, Settings } from 'lucide-react';
 import { functions } from '@/lib/api/functions';
+import { useSession } from 'next-auth/react';
 
 export default function Debug2FAPage() {
   const { 
@@ -23,6 +23,8 @@ export default function Debug2FAPage() {
     signOut 
   } = useAuth();
   
+  const { data: nextAuthSession } = useSession();
+  
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
@@ -30,39 +32,17 @@ export default function Debug2FAPage() {
   const getDetailedDebugInfo = async () => {
     setIsLoading(true);
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      let profileData = null;
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-        profileData = profile;
-      }
-
       setDebugInfo({
-        session: session ? {
+        nextAuthSession: nextAuthSession ? {
           user: {
-            id: session.user?.id,
-            email: session.user?.email,
-            created_at: session.user?.created_at
+            id: nextAuthSession.user?.id,
+            email: nextAuthSession.user?.email,
+            name: nextAuthSession.user?.name,
+            isAdmin: nextAuthSession.user?.isAdmin,
+            has2FA: nextAuthSession.user?.has2FA,
+            is2FAVerified: nextAuthSession.user?.is2FAVerified,
           },
-          expires_at: session.expires_at,
-          access_token: session.access_token?.substring(0, 20) + '...',
-          refresh_token: session.refresh_token?.substring(0, 20) + '...'
-        } : null,
-        error: error?.message,
-        profile: profileData ? {
-          id: profileData.id,
-          email: profileData.email,
-          is_admin: profileData.is_admin,
-          has_2fa: profileData.has_2fa,
-          two_factor_secret: profileData.two_factor_secret ? 'configured' : 'not configured',
-          is_2fa_verified: profileData.is_2fa_verified,
-          created_at: profileData.created_at,
-          updated_at: profileData.updated_at
+          expires: nextAuthSession.expires
         } : null,
         contextState: {
           user: user ? { id: user.id, email: user.email } : null,
@@ -112,21 +92,6 @@ export default function Debug2FAPage() {
       // Limpar localStorage
       localStorage.removeItem(`2fa-verified-${user.id}`);
       
-      // Resetar perfil no banco
-      const supabase = require('@/lib/supabase/client').supabase;
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          has_2fa: false,
-          two_factor_secret: null,
-          is_2fa_verified: false
-        })
-        .eq('id', user.id);
-
-      if (error) {
-        throw new Error('Erro ao limpar dados 2FA no banco');
-      }
-
       setTestResult({
         success: true,
         message: 'Dados 2FA limposos com sucesso'
@@ -217,27 +182,15 @@ export default function Debug2FAPage() {
                 </Alert>
               ) : (
                 <div className="space-y-4">
-                  {/* Sessão */}
+                  {/* Sessão NextAuth */}
                   <div>
-                    <h4 className="font-semibold mb-2">Sessão Supabase:</h4>
-                    {debugInfo.session ? (
+                    <h4 className="font-semibold mb-2">Sessão NextAuth:</h4>
+                    {debugInfo.nextAuthSession ? (
                       <pre className="text-xs bg-muted p-3 rounded overflow-auto">
-                        {JSON.stringify(debugInfo.session, null, 2)}
+                        {JSON.stringify(debugInfo.nextAuthSession, null, 2)}
                       </pre>
                     ) : (
                       <p className="text-muted-foreground">Nenhuma sessão ativa</p>
-                    )}
-                  </div>
-
-                  {/* Perfil */}
-                  <div>
-                    <h4 className="font-semibold mb-2">Perfil do Usuário:</h4>
-                    {debugInfo.profile ? (
-                      <pre className="text-xs bg-muted p-3 rounded overflow-auto">
-                        {JSON.stringify(debugInfo.profile, null, 2)}
-                      </pre>
-                    ) : (
-                      <p className="text-muted-foreground">Perfil não encontrado</p>
                     )}
                   </div>
 

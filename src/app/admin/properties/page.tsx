@@ -51,7 +51,7 @@ import {
 import type { CombinedUnit, Property } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { centsToBrl, getValue } from "@/lib/utils";
-import { useAuth } from "@/contexts/SupabaseAuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Skeleton } from "@/components/ui/skeleton";
 import { parseExcel } from "@/lib/parsers/excel-parser";
 

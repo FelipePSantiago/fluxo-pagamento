@@ -15,17 +15,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { useAuth } from "@/contexts/SupabaseAuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { useSession, signOut } from "next-auth/react";
 
 export default function Header() {
-  const { isAdmin, isFullyAuthenticated, user, signOut } = useAuth();
+  const { isAdmin, isFullyAuthenticated } = useAuth();
+  const { data: session } = useSession();
   const pathname = usePathname();
   const { toast } = useToast();
 
   const handleLogout = async () => {
     try {
-      await signOut();
+      await signOut({ callbackUrl: '/login' });
       toast({
         title: "Logout bem-sucedido!",
         description: "Você foi desconectado.",
@@ -74,10 +76,10 @@ export default function Header() {
                   >
                     <Avatar className="h-10 w-10">
                       <AvatarImage
-                        src={user?.user_metadata?.avatar_url || ""}
-                        alt={user?.user_metadata?.name || "Avatar"}
+                        src={session?.user?.image || ""}
+                        alt={session?.user?.name || "Avatar"}
                       />
-                      <AvatarFallback>{getInitials(user?.email || "")}</AvatarFallback>
+                      <AvatarFallback>{getInitials(session?.user?.email || "")}</AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
@@ -88,7 +90,7 @@ export default function Header() {
                         Minha Conta
                       </p>
                       <p className="text-xs leading-none text-muted-foreground">
-                        {user?.email}
+                        {session?.user?.email}
                       </p>
                     </div>
                   </DropdownMenuLabel>

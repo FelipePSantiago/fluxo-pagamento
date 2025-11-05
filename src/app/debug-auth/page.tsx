@@ -3,10 +3,10 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { supabase } from '@/lib/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import { useSession } from 'next-auth/react';
 
 export default function DebugAuthPage() {
   const { 
@@ -22,19 +22,20 @@ export default function DebugAuthPage() {
     signOut 
   } = useAuth();
   
+  const { data: nextAuthSession } = useSession();
+  
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const getDebugInfo = async () => {
     setIsLoading(true);
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
       const storageKeys = [];
       
       if (typeof window !== 'undefined') {
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
-          if (key && (key.includes('supabase') || key.includes('sb-'))) {
+          if (key && (key.includes('next-auth') || key.includes('session'))) {
             storageKeys.push({
               key,
               value: localStorage.getItem(key)?.substring(0, 50) + '...'
@@ -44,17 +45,17 @@ export default function DebugAuthPage() {
       }
 
       setDebugInfo({
-        session: session ? {
+        nextAuthSession: nextAuthSession ? {
           user: {
-            id: session.user?.id,
-            email: session.user?.email,
-            created_at: session.user?.created_at
+            id: nextAuthSession.user?.id,
+            email: nextAuthSession.user?.email,
+            name: nextAuthSession.user?.name,
+            isAdmin: nextAuthSession.user?.isAdmin,
+            has2FA: nextAuthSession.user?.has2FA,
+            is2FAVerified: nextAuthSession.user?.is2FAVerified,
           },
-          expires_at: session.expires_at,
-          access_token: session.access_token?.substring(0, 20) + '...',
-          refresh_token: session.refresh_token?.substring(0, 20) + '...'
+          expires: nextAuthSession.expires
         } : null,
-        error: error?.message,
         localStorageKeys: storageKeys,
         contextState: {
           user: user ? { id: user.id, email: user.email } : null,
@@ -148,12 +149,12 @@ export default function DebugAuthPage() {
                 </Alert>
               ) : (
                 <div className="space-y-4">
-                  {/* Sessão */}
+                  {/* Sessão NextAuth */}
                   <div>
-                    <h4 className="font-semibold mb-2">Sessão Supabase:</h4>
-                    {debugInfo.session ? (
+                    <h4 className="font-semibold mb-2">Sessão NextAuth:</h4>
+                    {debugInfo.nextAuthSession ? (
                       <pre className="text-xs bg-muted p-3 rounded overflow-auto">
-                        {JSON.stringify(debugInfo.session, null, 2)}
+                        {JSON.stringify(debugInfo.nextAuthSession, null, 2)}
                       </pre>
                     ) : (
                       <p className="text-muted-foreground">Nenhuma sessão ativa</p>
@@ -162,7 +163,7 @@ export default function DebugAuthPage() {
 
                   {/* localStorage */}
                   <div>
-                    <h4 className="font-semibold mb-2">LocalStorage (chaves Supabase):</h4>
+                    <h4 className="font-semibold mb-2">LocalStorage (chaves NextAuth):</h4>
                     {debugInfo.localStorageKeys?.length > 0 ? (
                       <pre className="text-xs bg-muted p-3 rounded overflow-auto">
                         {JSON.stringify(debugInfo.localStorageKeys, null, 2)}
@@ -191,7 +192,7 @@ export default function DebugAuthPage() {
             
             <Alert>
               <AlertDescription>
-                <strong>💡 Dica:</strong> Se estiver com erro de "Invalid Refresh Token", 
+                <strong>💡 Dica:</strong> Se estiver com erro de autenticação, 
                 use "Limpar Dados Corrompidos" e depois faça login novamente.
               </AlertDescription>
             </Alert>

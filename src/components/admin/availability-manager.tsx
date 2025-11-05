@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FileSpreadsheet, Loader2 } from 'lucide-react';
-import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useAuth } from "@/contexts/AuthContext";
 
 
 interface AvailabilityManagerProps {
