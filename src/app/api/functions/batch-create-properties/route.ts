@@ -1,42 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { db } from '@/lib/db';
 import { parseExcel } from '@/lib/parsers/excel-parser';
-
-// Função para criar cliente Supabase apenas quando necessário
-const getSupabaseClient = () => {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('Supabase credentials not configured');
-  }
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-};
 
 export async function POST(request: NextRequest) {
   try {
-    // Verificar autenticação via token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const authToken = authHeader.substring(7);
-    const supabase = getSupabaseClient();
-    const { data: { user }, error } = await supabase.auth.getUser(authToken);
-
-    if (error || !user) {
+    // Verificar autenticação via sessão NextAuth
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Verificar se é admin
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single();
+    const user = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: { isAdmin: true }
+    });
 
-    if (profileError || !profile?.is_admin) {
+    if (!user?.isAdmin) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
@@ -80,13 +63,13 @@ export async function POST(request: NextRequest) {
           state: row.state || row.estado || row['Estado'] || 'Estado não informado',
           value: row.value ? parseFloat(String(row.value).replace(/[^\d.,]/g, '').replace(',', '.')) : 0,
           status: row.status || 'available',
-          created_by: user.id,
-          enterprise_name: row.enterprise_name || row.empresa || row['Empresa'] || row.name || row.nome,
+          createdBy: session.user.id,
+          enterpriseName: row.enterprise_name || row.empresa || row['Empresa'] || row.name || row.nome,
           description: row.description || row.descricao || row['Descrição'] || null,
           image: row.image || row.imagem || row['Imagem'] || null,
           type: row.type || row.tipo || row['Tipo'] || null,
-          total_units: row.total_units ? parseInt(String(row.total_units)) : null,
-          available_units: row.available_units ? parseInt(String(row.available_units)) : null,
+          totalUnits: row.total_units ? parseInt(String(row.total_units)) : null,
+          availableUnits: row.available_units ? parseInt(String(row.available_units)) : null,
         };
 
         // Validar campos obrigatórios
@@ -104,21 +87,18 @@ export async function POST(request: NextRequest) {
 
     // Inserir propriedades no banco
     if (propertiesToInsert.length > 0) {
-      const { data: insertedProperties, error: insertError } = await supabase
-        .from('properties')
-        .upsert(propertiesToInsert, {
-          onConflict: 'id',
-          ignoreDuplicates: false
+      try {
+        await db.property.createMany({
+          data: propertiesToInsert,
+          skipDuplicates: true
         });
-
-      if (insertError) {
+        addedCount = propertiesToInsert.length;
+      } catch (insertError) {
         console.error('Error inserting properties:', insertError);
         return NextResponse.json({ 
           error: 'Erro ao salvar propriedades no banco de dados.' 
         }, { status: 500 });
       }
-
-      addedCount = propertiesToInsert.length;
     }
 
     return NextResponse.json({

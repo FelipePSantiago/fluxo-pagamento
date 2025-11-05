@@ -1,69 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-// Função para criar cliente Supabase apenas quando necessário
-const getSupabaseClient = () => {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('Supabase credentials not configured');
-  }
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-};
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { db } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
-    // Verificar autenticação via token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const token = authHeader.substring(7);
-    const supabase = getSupabaseClient();
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-
-    if (error || !user) {
+    // Verificar autenticação via sessão
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Buscar propriedades
-    const { data: properties, error: propertiesError } = await supabase
-      .from('properties')
-      .select(`
-        *,
-        property_pricing (
-          id,
-          property_id,
-          unit_type,
-          unit_number,
-          value,
-          status,
-          created_at,
-          updated_at,
-          private_area,
-          block,
-          sun_position,
-          typology,
-          parking_spaces,
-          appraisal_value,
-          financing_value,
-          sale_value,
-          payments,
-          installments,
-          notary_payment_method,
-          notary_installments,
-          broker_name,
-          broker_creci,
-          selected_unit
-        )
-      `)
-      .order('created_at', { ascending: false });
-
-    if (propertiesError) {
-      throw new Error('Failed to fetch properties');
-    }
+    const properties = await db.property.findMany({
+      include: {
+        propertyPricing: {
+          select: {
+            id: true,
+            propertyId: true,
+            unitType: true,
+            unitNumber: true,
+            value: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+            privateArea: true,
+            block: true,
+            sunPosition: true,
+            typology: true,
+            parkingSpaces: true,
+            appraisalValue: true,
+            financingValue: true,
+            saleValue: true,
+            payments: true,
+            installments: true,
+            notaryPaymentMethod: true,
+            notaryInstallments: true,
+            brokerName: true,
+            brokerCreci: true,
+            selectedUnit: true,
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
 
     return NextResponse.json({ properties });
   } catch (error: any) {

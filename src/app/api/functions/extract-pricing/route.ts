@@ -1,18 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { authenticator } from 'otplib';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import pdf from 'pdf-parse';
-
-// Função para criar cliente Supabase apenas quando necessário
-const getSupabaseClient = () => {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('Supabase credentials not configured');
-  }
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-};
 
 interface ExtractPricingOutput {
   grossIncome: number;
@@ -44,17 +33,10 @@ const processPdf = async (pdfBuffer: Buffer): Promise<ExtractPricingOutput> => {
 
 export async function POST(request: NextRequest) {
   try {
-    // Verificar autenticação via token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const token = authHeader.substring(7);
-    const supabase = getSupabaseClient();
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-
-    if (error || !user) {
+    // Verificar autenticação via sessão NextAuth
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

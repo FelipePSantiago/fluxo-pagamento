@@ -12,9 +12,9 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/lib/supabase/client';
+import { getServerSession } from 'next-auth';
 
 function Verify2FAPageContent() {
   const router = useRouter();
@@ -44,41 +44,18 @@ function Verify2FAPageContent() {
     try {
       console.log('Iniciando verificação 2FA...');
       
-      // Obter perfil do usuário para pegar o segredo
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('two_factor_secret')
-        .eq('id', user.id)
-        .single();
-
-      if (profileError || !profile?.two_factor_secret) {
-        console.error('Erro ao obter segredo 2FA:', profileError);
-        throw new Error("Configuração 2FA não encontrada. Configure o 2FA primeiro.");
-      }
-
-      // Gerar secretUri com o segredo salvo
-      const secretUri = `otpauth://totp/Entrada%20Facilitada:${user.email}?secret=${profile.two_factor_secret}&issuer=Entrada%20Facilitada`;
-      console.log('SecretUri gerado para verificação');
-
-      // Obter token de acesso do usuário
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        throw new Error("Sessão não encontrada. Faça login novamente.");
-      }
-
-      const response = await fetch('/api/functions/verify-2fa', {
+      // Usar a nova API de verificação 2FA
+      const response = await fetch('/api/auth/verify-2fa', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ secretUri, token }),
+        body: JSON.stringify({ token }),
       });
 
       if (response.ok) {
         const result = await response.json();
-        if (result.success) {
+        if (result.verified) {
           toast({
             title: "Verificação bem-sucedida!",
             description: "Você será redirecionado para o simulador.",

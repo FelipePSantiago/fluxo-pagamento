@@ -1,42 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { db } from '@/lib/db';
 import { format, parseISO, addYears } from 'date-fns';
-
-// Função para criar cliente Supabase apenas quando necessário
-const getSupabaseClient = () => {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('Supabase credentials not configured');
-  }
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-};
 
 export async function POST(request: NextRequest) {
   try {
-    // Verificar autenticação via token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const token = authHeader.substring(7);
-    const supabase = getSupabaseClient();
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-
-    if (error || !user) {
+    // Verificar autenticação via sessão
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Verificar se é admin
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single();
+    const user = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: { isAdmin: true }
+    });
 
-    if (profileError || !profile?.is_admin) {
+    if (!user?.isAdmin) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
@@ -50,24 +33,26 @@ export async function POST(request: NextRequest) {
     const startDate = constructionStartDate ? format(parseISO(constructionStartDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
     const deliveryDateFormatted = deliveryDate ? format(parseISO(deliveryDate), 'yyyy-MM-dd') : format(addYears(parseISO(startDate), 2), 'yyyy-MM-dd');
 
-    const { error: upsertError } = await supabase
-      .from('properties')
-      .upsert({
+    await db.property.upsert({
+      where: { id },
+      update: {
+        name: enterpriseName,
+        address: '',
+        city: '',
+        state: '',
+        value: 0,
+        updatedAt: new Date(),
+      },
+      create: {
         id,
         name: enterpriseName,
         address: '',
         city: '',
         state: '',
         value: 0,
-        updated_at: new Date().toISOString(),
-        created_by: user.id,
-      }, {
-        onConflict: 'id'
-      });
-
-    if (upsertError) {
-      throw new Error('Failed to save property');
-    }
+        createdBy: session.user.id,
+      }
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

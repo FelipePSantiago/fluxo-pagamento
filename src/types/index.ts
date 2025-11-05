@@ -14,6 +14,8 @@ export interface AppUser {
     is2FAVerified?: boolean;
     createdAt?: Date;
     updatedAt?: Date;
+    name?: string;
+    image?: string;
 }
 
 export interface TwoFactorSecret {

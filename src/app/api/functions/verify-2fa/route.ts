@@ -1,31 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { db } from '@/lib/db';
 import { authenticator } from 'otplib';
-
-// Função para criar cliente Supabase apenas quando necessário
-const getSupabaseClient = () => {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('Supabase credentials not configured');
-  }
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-};
 
 export async function POST(request: NextRequest) {
   try {
-    // Verificar autenticação via token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const authToken = authHeader.substring(7);
-    const supabase = getSupabaseClient();
-    const { data: { user }, error } = await supabase.auth.getUser(authToken);
-
-    if (error || !user) {
+    // Verificar autenticação via sessão
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -37,13 +21,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Buscar perfil do usuário
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
+    const user = await db.user.findUnique({
+      where: { id: session.user.id }
+    });
 
-    if (profileError || !profile) {
+    if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
@@ -55,18 +37,13 @@ export async function POST(request: NextRequest) {
     const isValid = authenticator.verify({ token, secret });
 
     if (isValid) {
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          has_2fa: true,
-          is_2fa_verified: true,
-        })
-        .eq('id', user.id);
-
-      if (updateError) {
-        console.error('Erro ao atualizar perfil 2FA:', updateError);
-        throw new Error('Failed to update 2FA verification status');
-      }
+      await db.user.update({
+        where: { id: session.user.id },
+        data: {
+          has2FA: true,
+          is2FAVerified: true,
+        }
+      });
 
       console.log('Perfil 2FA atualizado com sucesso');
     }
