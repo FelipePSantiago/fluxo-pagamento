@@ -46,6 +46,7 @@ function Setup2FAPageContent() {
       const generateSecret = async () => {
         setIsLoading(true);
         try {
+          console.log('Iniciando geração de segredo 2FA...');
           const result = await functions.generateTwoFactorSecret();
           const otpauthUrl = result.secretUri;
 
@@ -54,9 +55,13 @@ function Setup2FAPageContent() {
               "Não foi possível obter a URI de autenticação. Tente recarregar a página."
             );
           }
+          
+          console.log('Segredo 2FA gerado com sucesso:', otpauthUrl.substring(0, 50) + '...');
           setSecretUri(otpauthUrl);
+          
           const qr = await QRCode.toDataURL(otpauthUrl);
           setQrCode(qr);
+          console.log('QR Code gerado com sucesso');
         } catch (error: unknown) {
           const err =
             error instanceof Error ? error : new Error("Erro desconhecido");
@@ -87,6 +92,7 @@ function Setup2FAPageContent() {
     setIsVerifying(true);
 
     try {
+      console.log('Iniciando verificação 2FA...');
       const result = await functions.verifyAndEnableTwoFactor({ secretUri, token });
       const isEnabled = result.success;
 
@@ -110,10 +116,12 @@ function Setup2FAPageContent() {
           router.push("/simulator");
         }, 1000);
       } else {
+        console.error('Verificação 2FA falhou:', result);
         throw new Error("Código inválido. Tente novamente.");
       }
     } catch (error: unknown) {
       const err = error as Error;
+      console.error('Erro na verificação 2FA:', err);
       toast({
         variant: "destructive",
         title: "Erro na Verificação",
