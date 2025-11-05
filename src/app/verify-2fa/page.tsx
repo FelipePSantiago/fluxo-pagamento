@@ -42,6 +42,24 @@ function Verify2FAPageContent() {
     setIsLoading(true);
 
     try {
+      console.log('Iniciando verificação 2FA...');
+      
+      // Obter perfil do usuário para pegar o segredo
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('two_factor_secret')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError || !profile?.two_factor_secret) {
+        console.error('Erro ao obter segredo 2FA:', profileError);
+        throw new Error("Configuração 2FA não encontrada. Configure o 2FA primeiro.");
+      }
+
+      // Gerar secretUri com o segredo salvo
+      const secretUri = `otpauth://totp/Entrada%20Facilitada:${user.email}?secret=${profile.two_factor_secret}&issuer=Entrada%20Facilitada`;
+      console.log('SecretUri gerado para verificação');
+
       // Obter token de acesso do usuário
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -55,7 +73,7 @@ function Verify2FAPageContent() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ secretUri, token }),
       });
 
       if (response.ok) {
@@ -84,6 +102,7 @@ function Verify2FAPageContent() {
       }
     } catch (error: unknown) {
       const err = error as Error;
+      console.error('Erro na verificação 2FA:', err);
       toast({
         variant: "destructive",
         title: "Erro na Verificação",

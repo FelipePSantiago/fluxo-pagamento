@@ -55,15 +55,20 @@ export async function POST(request: NextRequest) {
     const isValid = authenticator.verify({ token, secret });
 
     if (isValid) {
-      await supabase
+      const { error: updateError } = await supabase
         .from('profiles')
         .update({
-          where: { id: user.id },
-          data: {
-            has_2fa: true,
-            is_2fa_verified: true,
-          },
-        });
+          has_2fa: true,
+          is_2fa_verified: true,
+        })
+        .eq('id', user.id);
+
+      if (updateError) {
+        console.error('Erro ao atualizar perfil 2FA:', updateError);
+        throw new Error('Failed to update 2FA verification status');
+      }
+
+      console.log('Perfil 2FA atualizado com sucesso');
     }
 
     return NextResponse.json({ success: isValid });

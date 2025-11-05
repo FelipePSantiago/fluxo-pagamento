@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, Session, SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
 import type { Property } from '@/types';
@@ -133,7 +133,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   // Carregar propriedades
-  const loadProperties = async () => {
+  const loadProperties = useCallback(async () => {
     if (!user || !isFullyAuthenticated) {
       setProperties([]);
       setPropertiesLoading(false);
@@ -158,7 +158,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } finally {
       setPropertiesLoading(false);
     }
-  };
+  }, [user, isFullyAuthenticated]);
 
   // Sign in com email e senha
   const signIn = async (email: string, password: string) => {
@@ -349,24 +349,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Efeito para carregar propriedades quando autenticado
   useEffect(() => {
     loadProperties();
-  }, [user, isFullyAuthenticated]);
+  }, [user, isFullyAuthenticated, loadProperties]);
 
   // Efeito para redirecionar para configuração/verificação 2FA quando necessário
   useEffect(() => {
     if (user && profile && !authLoading && typeof window !== 'undefined') {
       const currentPath = window.location.pathname;
       
+      // Evitar redirecionamentos em páginas públicas
+      const publicPages = ['/login', '/signup', '/forgot-password', '/debug-2fa', '/debug-auth'];
+      const isPublicPage = publicPages.some(page => currentPath.includes(page));
+      
+      if (isPublicPage) {
+        console.log('Página pública detectada, ignorando redirecionamentos 2FA');
+        return;
+      }
+      
       // Se o usuário tem 2FA configurado mas não verificado
       if (profile.has_2fa && !is2FAVerified) {
         if (!currentPath.includes('/verify-2fa')) {
-          console.log('Redirecionando para verificação 2FA');
+          console.log('Redirecionando para verificação 2FA - usuário tem 2FA mas não verificado');
           window.location.href = '/verify-2fa';
         }
       }
       // Se o usuário não tem 2FA configurado
       else if (!profile.has_2fa) {
         if (!currentPath.includes('/setup-2fa') && !currentPath.includes('/login')) {
-          console.log('Redirecionando para configuração 2FA');
+          console.log('Redirecionando para configuração 2FA - usuário não tem 2FA');
           window.location.href = '/setup-2fa';
         }
       }

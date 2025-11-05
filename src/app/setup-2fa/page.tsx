@@ -51,6 +51,7 @@ function Setup2FAPageContent() {
           const otpauthUrl = result.secretUri;
 
           if (!otpauthUrl) {
+            console.error('Erro: secretUri não encontrado na resposta:', result);
             throw new Error(
               "Não foi possível obter a URI de autenticação. Tente recarregar a página."
             );
@@ -59,17 +60,38 @@ function Setup2FAPageContent() {
           console.log('Segredo 2FA gerado com sucesso:', otpauthUrl.substring(0, 50) + '...');
           setSecretUri(otpauthUrl);
           
-          const qr = await QRCode.toDataURL(otpauthUrl);
-          setQrCode(qr);
-          console.log('QR Code gerado com sucesso');
+          // Gerar QR Code com tratamento de erro robusto
+          try {
+            console.log('Iniciando geração do QR Code...');
+            const qr = await QRCode.toDataURL(otpauthUrl);
+            setQrCode(qr);
+            console.log('QR Code gerado com sucesso');
+          } catch (qrError) {
+            console.error('Erro ao gerar QR Code:', qrError);
+            // Mesmo que o QR Code falhe, continuamos com o fluxo
+            toast({
+              variant: "destructive",
+              title: "Aviso",
+              description: "QR Code não pôde ser gerado, mas você pode configurar manualmente.",
+            });
+          }
         } catch (error: unknown) {
           const err =
             error instanceof Error ? error : new Error("Erro desconhecido");
           console.error("Error generating 2FA secret for setup:", err);
+          
+          // Mensagens de erro mais específicas
+          let errorMessage = err.message || "Por favor, recarregue a página.";
+          if (err.message.includes('401') || err.message.includes('Unauthorized')) {
+            errorMessage = "Sessão expirada. Por favor, faça login novamente.";
+          } else if (err.message.includes('2FA já está configurado')) {
+            errorMessage = "2FA já está configurado para sua conta.";
+          }
+          
           toast({
             variant: "destructive",
             title: "Erro ao Gerar Segredo 2FA",
-            description: err.message || "Por favor, recarregue a página.",
+            description: errorMessage,
           });
         } finally {
           setIsLoading(false);
@@ -117,15 +139,26 @@ function Setup2FAPageContent() {
         }, 1000);
       } else {
         console.error('Verificação 2FA falhou:', result);
-        throw new Error("Código inválido. Tente novamente.");
+        throw new Error("Código inválido. Verifique o código e tente novamente.");
       }
     } catch (error: unknown) {
       const err = error as Error;
       console.error('Erro na verificação 2FA:', err);
+      
+      // Mensagens de erro mais específicas
+      let errorMessage = err.message || "Não foi possível verificar o código.";
+      if (err.message.includes('401') || err.message.includes('Unauthorized')) {
+        errorMessage = "Sessão expirada. Por favor, faça login novamente.";
+      } else if (err.message.includes('invalid') || err.message.includes('inválido')) {
+        errorMessage = "Código inválido. Verifique o código gerado pelo seu aplicativo.";
+      } else if (err.message.includes('secret')) {
+        errorMessage = "Erro na configuração do segredo. Tente configurar o 2FA novamente.";
+      }
+      
       toast({
         variant: "destructive",
         title: "Erro na Verificação",
-        description: err.message || "Não foi possível verificar o código.",
+        description: errorMessage,
       });
     } finally {
       setIsVerifying(false);
