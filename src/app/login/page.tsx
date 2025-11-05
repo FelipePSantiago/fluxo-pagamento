@@ -152,14 +152,6 @@ export default function LoginPage() {
         <CardFooter className="flex flex-col gap-4">
           <div className="w-full text-center">
             <p className="text-sm text-muted-foreground mb-2">
-              Ainda não tem uma conta?
-            </p>
-            <Button variant="outline" className="w-full" asChild>
-              <Link href="/signup">Criar Conta</Link>
-            </Button>
-          </div>
-          <div className="w-full text-center">
-            <p className="text-sm text-muted-foreground mb-2">
               Esqueceu a senha?
             </p>
             <Button variant="outline" className="w-full" asChild>

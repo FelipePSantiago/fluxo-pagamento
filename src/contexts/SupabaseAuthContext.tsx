@@ -23,6 +23,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, name: string) => Promise<{ error: any }>;
   signInWithGoogle: () => Promise<{ error: any }>;
+  clearCorruptedAuth: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType>({
@@ -43,6 +44,7 @@ export const AuthContext = createContext<AuthContextType>({
   signIn: async () => ({ error: null }),
   signUp: async () => ({ error: null }),
   signInWithGoogle: async () => ({ error: null }),
+  clearCorruptedAuth: async () => {},
 });
 
 export const useAuth = () => {
@@ -86,6 +88,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       setProfile(data);
+      
+      // Definir como fully authenticated após carregar o perfil
+      if (data) {
+        // Se o usuário não tem 2FA configurado, já está fully authenticated
+        if (!data.has_2fa) {
+          setIsFullyAuthenticated(true);
+          setIs2FAVerified(true);
+        } else {
+          // Se tem 2FA, verificar se já foi verificado nesta sessão
+          const wasVerified = localStorage.getItem(`2fa-verified-${userId}`);
+          if (wasVerified === "true") {
+            setIs2FAVerified(true);
+            setIsFullyAuthenticated(true);
+          }
+        }
+      }
     } catch (error) {
       console.error('Error loading profile:', error);
     }
@@ -121,11 +139,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Sign in com email e senha
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      // Limpar sessão anterior antes de fazer login
+      await supabase.auth.signOut({ scope: 'local' });
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        console.error('Sign in error:', error);
+        return { error };
+      }
+
+      // Login bem-sucedido
+      console.log('Sign in successful:', data.user?.email);
+      return { error: null };
+    } catch (error) {
+      console.error('Unexpected sign in error:', error);
+      return { error: { message: 'Erro inesperado ao fazer login' } };
+    }
   };
 
   // Sign up
@@ -153,21 +187,102 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return { error };
   };
 
+  // Função para limpar dados de autenticação corrompidos
+  const clearCorruptedAuth = async () => {
+    try {
+      // Limpar todos os dados do localStorage relacionados ao auth
+      if (typeof window !== 'undefined') {
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.includes('supabase') || key.includes('sb-'))) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+      }
+      
+      // Limpar estado
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setIsFullyAuthenticated(false);
+      setIs2FAVerified(false);
+      setProperties([]);
+      setPropertiesLoading(false);
+      
+      // Forçar sign out no Supabase
+      await supabase.auth.signOut({ scope: 'global' });
+      
+      console.log('Corrupted auth data cleared');
+    } catch (error) {
+      console.error('Error clearing corrupted auth:', error);
+    }
+  };
+
   // Sign out
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      const { error } = await supabase.auth.signOut();
+      
+      // Limpar estado local independentemente do erro
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setIsFullyAuthenticated(false);
+      setIs2FAVerified(false);
+      setProperties([]);
+      setPropertiesLoading(false);
+      
+      if (error) {
+        console.error('Sign out error:', error);
+      } else {
+        console.log('Sign out successful');
+      }
+    } catch (error) {
+      console.error('Unexpected sign out error:', error);
+      // Mesmo em caso de erro, limpar estado local
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setIsFullyAuthenticated(false);
+      setIs2FAVerified(false);
+      setProperties([]);
+      setPropertiesLoading(false);
+    }
   };
 
   // Efeito para inicializar autenticação
   useEffect(() => {
     // Obter sessão inicial
     const getInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        await loadProfile(session.user.id);
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          // Limpar dados inválidos
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setIsFullyAuthenticated(false);
+          setIs2FAVerified(false);
+        } else {
+          setSession(session);
+          setUser(session?.user ?? null);
+          
+          if (session?.user) {
+            await loadProfile(session.user.id);
+          }
+        }
+      } catch (error) {
+        console.error('Error in getInitialSession:', error);
+        // Limpar estado em caso de erro
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setIsFullyAuthenticated(false);
+        setIs2FAVerified(false);
       }
       
       setIsPageLoading(false);
@@ -178,13 +293,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Escutar mudanças na autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
+        console.log('Auth state changed:', event, session?.user?.email);
         
-        if (session?.user) {
-          await loadProfile(session.user.id);
-        } else {
+        try {
+          setSession(session);
+          setUser(session?.user ?? null);
+          
+          if (session?.user) {
+            await loadProfile(session.user.id);
+          } else {
+            setProfile(null);
+            setIsFullyAuthenticated(false);
+            setIs2FAVerified(false);
+          }
+        } catch (error) {
+          console.error('Error in auth state change:', error);
+          // Limpar estado em caso de erro
+          setSession(null);
+          setUser(null);
           setProfile(null);
+          setIsFullyAuthenticated(false);
+          setIs2FAVerified(false);
         }
         
         setIsPageLoading(false);
@@ -198,6 +327,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     loadProperties();
   }, [user, isFullyAuthenticated]);
+
+  // Efeito para redirecionar para verificação 2FA quando necessário
+  useEffect(() => {
+    if (user && profile && profile.has_2fa && !is2FAVerified && typeof window !== 'undefined') {
+      // Verificar se não está já na página de verificação 2FA
+      if (!window.location.pathname.includes('/verify-2fa')) {
+        window.location.href = '/verify-2fa';
+      }
+    }
+  }, [user, profile, is2FAVerified]);
 
   const value: AuthContextType = {
     user,
@@ -217,6 +356,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     signIn,
     signUp,
     signInWithGoogle,
+    clearCorruptedAuth,
   };
 
   return (

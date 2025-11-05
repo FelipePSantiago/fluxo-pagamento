@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase/client';
 
 function Verify2FAPageContent() {
   const router = useRouter();
@@ -41,13 +42,18 @@ function Verify2FAPageContent() {
     setIsLoading(true);
 
     try {
-      // Para verificação 2FA, vamos verificar o token com o segredo do usuário
-      // Esta é uma implementação simplificada - você pode precisar ajustar
-      // conforme sua lógica de verificação 2FA
+      // Obter token de acesso do usuário
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error("Sessão não encontrada. Faça login novamente.");
+      }
+
       const response = await fetch('/api/functions/verify-2fa', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ token }),
       });
@@ -57,15 +63,20 @@ function Verify2FAPageContent() {
         if (result.success) {
           toast({
             title: "Verificação bem-sucedida!",
-            description: "Você será redirecionado em instantes.",
+            description: "Você será redirecionado para o simulador.",
           });
           localStorage.setItem(`2fa-verified-${user.id}`, "true");
           setIs2FAVerified(true);
+          // Redirecionar para o simulador após verificação bem-sucedida
+          setTimeout(() => {
+            router.push('/simulator');
+          }, 1000);
         } else {
           throw new Error("Código inválido. Tente novamente.");
         }
       } else {
-        throw new Error("Erro na verificação");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Erro na verificação");
       }
     } catch (error: unknown) {
       const err = error as Error;
